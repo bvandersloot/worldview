@@ -43,6 +43,9 @@ impl View {
             let theirs = other.hard_core.get(key).unwrap_or(&their_empty);
             let numerator = mine.difference(theirs).count() + theirs.difference(mine).count();
             let denomenator = mine.len() + theirs.len();
+            if denomenator == 0 {
+                continue
+            }
             total_count += count;
             total += (*count as f64) * (numerator as f64) / (denomenator as f64);
         }
@@ -63,6 +66,9 @@ impl View {
             let theirs = other.all_seen.get(key).unwrap_or(&their_empty);
             let numerator = mine.intersection(theirs).count();
             let denomenator = mine.union(theirs).count();
+            if denomenator == 0 {
+                continue
+            }
             total_count += count;
             total += (*count as f64) * (numerator as f64) / (denomenator as f64);
         }
