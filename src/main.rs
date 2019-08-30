@@ -16,6 +16,5 @@ fn main() {
     let mut v = View::new(rc_w);
     let test = IpAddr::V4(Ipv4Addr::new(141, 212, 121, 1));
     v.add_perspectives(vec![test]);
-    println!("{:?}", v.features().iter().max());
     println!("Hello, world!");
 }

@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::collections::{HashMap,HashSet};
+use std::collections::hash_map::Entry::{Vacant,Occupied};
 use std::rc::Rc;
 
 use world::{World,Path,ASN};
@@ -7,16 +8,17 @@ use std::net::{IpAddr};
 pub struct View {
     world: Rc<World>,
     perspectives: Vec<IpAddr>,
-    counts: Vec<u64>,
+    hard_core: HashMap<(IpAddr,u32),HashSet<ASN>>,
+    all_seen: HashMap<(IpAddr,u32),HashSet<ASN>>,
 }
 
 impl View {
     pub fn new(world : Rc<World>) -> Self {
-        let counts = vec![0; world.known_asns.len()];
         View{
             world: world,
             perspectives: vec![],
-            counts: counts,
+            hard_core: HashMap::new(),
+            all_seen: HashMap::new(),
         }
     }
 
@@ -27,39 +29,86 @@ impl View {
         self.perspectives.extend(perspectives);
     }
 
-    pub fn features(&self) -> &Vec<u64> {
-        &self.counts
+    pub fn core_dissimilarity(&self, other: &View) -> Option<f64> {
+        if !Rc::ptr_eq(&self.world, &other.world) {
+            return None;
+        }
+        let mut total : f64 = 0.0;
+        let mut total_count = 0;
+        for (key, count) in self.world.destination_counts.iter() {
+            let mine_empty = HashSet::new();
+            let their_empty = HashSet::new();
+            let mine = self.hard_core.get(key).unwrap_or(&mine_empty);
+            let theirs = other.hard_core.get(key).unwrap_or(&their_empty);
+            let numerator = mine.difference(theirs).count() + theirs.difference(mine).count();
+            let denomenator = mine.len() + theirs.len();
+            total_count += count;
+            total += (*count as f64) * (numerator as f64) / (denomenator as f64);
+        }
+        total /= total_count as f64;
+        return Some(total);
     }
 
-    pub fn distance(&self, other: &Path) -> f64 {
-        0.0
+    pub fn jaccard_dissimailrity(&self, other: &View) -> Option<f64> {
+        if !Rc::ptr_eq(&self.world, &other.world) {
+            return None;
+        }
+        let mut total : f64 = 0.0;
+        let mut total_count = 0;
+        for (key, count) in self.world.destination_counts.iter() {
+            let mine_empty = HashSet::new();
+            let their_empty = HashSet::new();
+            let mine = self.all_seen.get(key).unwrap_or(&mine_empty);
+            let theirs = other.all_seen.get(key).unwrap_or(&their_empty);
+            let numerator = mine.intersection(theirs).count();
+            let denomenator = mine.union(theirs).count();
+            total_count += count;
+            total += (*count as f64) * (numerator as f64) / (denomenator as f64);
+        }
+        total /= total_count as f64;
+        return Some(total);
     }
 
     fn score_paths(&mut self, addr: &IpAddr) {
-        for (path, count) in self.build_paths(addr) {
-            for asn in path.path.iter() {
-                if let Some(idx) = self.world.known_asns.iter().position(|&x| x == *asn) {
-                    self.counts[idx] += count
-                }
+        for (path, ip, prefix) in self.build_paths(addr) {
+            let mut value = HashSet::new();
+            value.extend(path.path.clone());
+            match self.hard_core.entry((ip, prefix)) {
+                Vacant(vacant) => {
+                    vacant.insert(value);
+                },
+                Occupied(mut occupied) => {
+                    occupied.get_mut().intersection(&value);
+                },
+            }
+            let mut value2 = HashSet::new();
+            value2.extend(path.path);
+            match self.all_seen.entry((ip, prefix)) {
+                Vacant(vacant) => {
+                    vacant.insert(value2);
+                },
+                Occupied(mut occupied) => {
+                    occupied.get_mut().union(&value2);
+                },
             }
         }
     }
 
-    fn build_paths(&self, addr: &IpAddr) -> Vec<(Path, u64)> {
+    fn build_paths(&self, addr: &IpAddr) -> Vec<(Path, IpAddr, u32)> {
         let mut result = vec![];
         let lookup = match addr {
             IpAddr::V4(v4) => self.world.paths_v4.longest_match(*v4).map(|x| x.2),
             IpAddr::V6(v6) => self.world.paths_v6.longest_match(*v6).map(|x| x.2),
         };
         if let Some(source_known_paths_in) = lookup {
-            for ((dest_addr, prefix), count) in self.world.destination_counts.iter() {
+            for ((dest_addr, prefix), _) in self.world.destination_counts.iter() {
                 let dest_lookup = match dest_addr {
                     IpAddr::V4(v4) => self.world.paths_v4.exact_match(*v4, *prefix),
                     IpAddr::V6(v6) => self.world.paths_v6.exact_match(*v6, *prefix),
                 };
                 if let Some(dest_known_paths_in) = dest_lookup {
                     if let Some(shortest) = View::shortest_path(source_known_paths_in, dest_known_paths_in, &self.world) {
-                        result.push((shortest, *count));
+                        result.push((shortest, *dest_addr, *prefix));
                     }
                 }
             }
