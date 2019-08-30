@@ -1,20 +1,21 @@
-use std::collections::{HashMap,HashSet};
-use std::collections::hash_map::Entry::{Vacant,Occupied};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use world::{World,Path,ASN};
-use std::net::{IpAddr};
+use std::net::IpAddr;
+use world::{Path, World, ASN};
 
+#[derive(Clone)]
 pub struct View {
     world: Rc<World>,
     perspectives: Vec<IpAddr>,
-    hard_core: HashMap<(IpAddr,u32),HashSet<ASN>>,
-    all_seen: HashMap<(IpAddr,u32),HashSet<ASN>>,
+    hard_core: HashMap<(IpAddr, u32), HashSet<ASN>>,
+    all_seen: HashMap<(IpAddr, u32), HashSet<ASN>>,
 }
 
 impl View {
-    pub fn new(world : Rc<World>) -> Self {
-        View{
+    pub fn new(world: Rc<World>) -> Self {
+        View {
             world: world,
             perspectives: vec![],
             hard_core: HashMap::new(),
@@ -22,7 +23,7 @@ impl View {
         }
     }
 
-    pub fn add_perspectives(&mut self, perspectives : Vec<IpAddr>) {
+    pub fn add_perspectives(&mut self, perspectives: Vec<IpAddr>) {
         for x in perspectives.iter() {
             self.score_paths(&x);
         }
@@ -33,7 +34,7 @@ impl View {
         if !Rc::ptr_eq(&self.world, &other.world) {
             return None;
         }
-        let mut total : f64 = 0.0;
+        let mut total: f64 = 0.0;
         let mut total_count = 0;
         for (key, count) in self.world.destination_counts.iter() {
             let mine_empty = HashSet::new();
@@ -49,11 +50,11 @@ impl View {
         return Some(total);
     }
 
-    pub fn jaccard_dissimailrity(&self, other: &View) -> Option<f64> {
+    pub fn jaccard_dissimilarity(&self, other: &View) -> Option<f64> {
         if !Rc::ptr_eq(&self.world, &other.world) {
             return None;
         }
-        let mut total : f64 = 0.0;
+        let mut total: f64 = 0.0;
         let mut total_count = 0;
         for (key, count) in self.world.destination_counts.iter() {
             let mine_empty = HashSet::new();
@@ -66,7 +67,27 @@ impl View {
             total += (*count as f64) * (numerator as f64) / (denomenator as f64);
         }
         total /= total_count as f64;
-        return Some(total);
+        return Some(1.0 - total);
+    }
+
+    pub fn hard_core_mean(&self) -> f64 {
+        let mut total: f64 = 0.0;
+        let mut total_count = 0;
+        for set in self.hard_core.values() {
+            total_count += 1;
+            total += set.len() as f64;
+        }
+        return total / (total_count as f64);
+    }
+
+    pub fn all_seen_mean(&self) -> f64 {
+        let mut total: f64 = 0.0;
+        let mut total_count = 0;
+        for set in self.all_seen.values() {
+            total_count += 1;
+            total += set.len() as f64;
+        }
+        return total / (total_count as f64);
     }
 
     fn score_paths(&mut self, addr: &IpAddr) {
@@ -76,20 +97,20 @@ impl View {
             match self.hard_core.entry((ip, prefix)) {
                 Vacant(vacant) => {
                     vacant.insert(value);
-                },
+                }
                 Occupied(mut occupied) => {
                     occupied.get_mut().intersection(&value);
-                },
+                }
             }
             let mut value2 = HashSet::new();
             value2.extend(path.path);
             match self.all_seen.entry((ip, prefix)) {
                 Vacant(vacant) => {
                     vacant.insert(value2);
-                },
+                }
                 Occupied(mut occupied) => {
                     occupied.get_mut().union(&value2);
-                },
+                }
             }
         }
     }
@@ -107,18 +128,24 @@ impl View {
                     IpAddr::V6(v6) => self.world.paths_v6.exact_match(*v6, *prefix),
                 };
                 if let Some(dest_known_paths_in) = dest_lookup {
-                    if let Some(shortest) = View::shortest_path(source_known_paths_in, dest_known_paths_in, &self.world) {
+                    if let Some(shortest) =
+                        View::shortest_path(source_known_paths_in, dest_known_paths_in, &self.world)
+                    {
                         result.push((shortest, *dest_addr, *prefix));
                     }
                 }
             }
-        } 
-        return result
+        }
+        return result;
     }
 
-    fn shortest_path(src_in_paths : &HashSet<Path>, dst_in_paths : &HashSet<Path>, world: &World) -> Option<Path> {
-        let mut shortest : Option<Path> = None;
-        let mut shortest_valleyless : Option<Path> = None;
+    fn shortest_path(
+        src_in_paths: &HashSet<Path>,
+        dst_in_paths: &HashSet<Path>,
+        world: &World,
+    ) -> Option<Path> {
+        let mut shortest: Option<Path> = None;
+        let mut shortest_valleyless: Option<Path> = None;
         for src_path in src_in_paths.iter() {
             for dst_path in dst_in_paths.iter() {
                 if let Some(short) = View::intersect_paths(src_path, dst_path) {
@@ -140,7 +167,6 @@ impl View {
         }
         shortest_valleyless.or(shortest)
     }
-
 
     fn choose_best_option(pair: (usize, usize)) -> impl FnOnce((usize, usize)) -> (usize, usize) {
         move |current| {
@@ -175,10 +201,9 @@ impl View {
                 ret.push(suba[n])
             }
             ret.extend_from_slice(subb);
-            Some(Path{path:ret})
+            Some(Path { path: ret })
         } else {
             None
         }
     }
-
 }

@@ -1,7 +1,7 @@
 extern crate treebitmap;
 
-use std::collections::{HashMap, HashSet, VecDeque, BTreeSet};
 use std::cmp::Ordering;
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::net::IpAddr::{V4, V6};
@@ -49,7 +49,6 @@ impl World {
         result.load_relationships(as_relationship_file);
         result.load_bgp_data(bgp_data_file);
         result.load_destinations(destination_file);
-        print!("{} {} {} {} {}\n", result.as_relationships.len(), result.paths_v4.len(), result.paths_v6.len(), result.destination_counts.len(), result.known_asns.len());
         result
     }
 
@@ -58,7 +57,7 @@ impl World {
         let f = File::open(fname).expect("file not found");
         for line in BufReader::new(f).lines().map(|x| x.unwrap()) {
             if line.starts_with('#') {
-                continue
+                continue;
             }
             let fields: Vec<&str> = line.split("|").collect();
             let a = fields[0].parse::<ASN>().unwrap();
@@ -116,9 +115,7 @@ impl World {
             let addr = IpAddr::from_str(line.as_str()).unwrap();
             match addr {
                 V4(v4) => {
-                    if let Some((match_addr, match_len, _)) =
-                        self.paths_v4.longest_match(v4)
-                    {
+                    if let Some((match_addr, match_len, _)) = self.paths_v4.longest_match(v4) {
                         *self
                             .destination_counts
                             .entry((IpAddr::V4(match_addr), match_len))
@@ -126,9 +123,7 @@ impl World {
                     }
                 }
                 V6(v6) => {
-                    if let Some((match_addr, match_len, _)) =
-                        self.paths_v6.longest_match(v6)
-                    {
+                    if let Some((match_addr, match_len, _)) = self.paths_v6.longest_match(v6) {
                         *self
                             .destination_counts
                             .entry((IpAddr::V6(match_addr), match_len))
@@ -142,9 +137,7 @@ impl World {
 
 impl Path {
     pub fn new() -> Path {
-        Path {
-            path: vec![],
-        }
+        Path { path: vec![] }
     }
 
     pub fn build_from_str(path: &str) -> HashSet<Path> {
@@ -172,9 +165,7 @@ impl Path {
     fn prepend(path: &Path, asn: &ASN) -> Path {
         let mut new_path = vec![*asn];
         new_path.extend(path.path.clone());
-        return Path {
-            path: new_path,
-        };
+        return Path { path: new_path };
     }
 
     fn parse_str_to_asns(string: &str) -> Vec<ASN> {
@@ -192,15 +183,18 @@ impl Path {
 
     pub fn valleyless(&self, world: &World) -> bool {
         let mut state = ASRelation::No;
-        for i in 0..self.path.len()-1 {
-            if let Some(next) = world.as_relationships.get(&(self.path[i], self.path[i+1])) {
+        for i in 0..self.path.len() - 1 {
+            if let Some(next) = world
+                .as_relationships
+                .get(&(self.path[i], self.path[i + 1]))
+            {
                 if next >= &state {
                     state = *next;
                 } else {
                     return false;
                 }
             } else {
-                return false
+                return false;
             }
         }
         true

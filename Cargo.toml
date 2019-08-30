@@ -8,3 +8,4 @@ authors = ["Benjamin VanderSloot <admin@benvds.com>"]
 [dependencies]
 treebitmap = "^0.4"
 serde = { version = "1.0", features = ["derive"] }
+itertools = "^0.8"
